@@ -87,7 +87,7 @@ func handleCallback(callbackQuery *tgBotAPI.CallbackQuery, bot *tgBotAPI.BotAPI)
     switch callbackQuery.Data { 
     case "register": 
      registeredUsers[chatID] = true // Регистрация пользователя 
-     msg := tgBotAPI.NewMessage(chatID, "Вы успешно зарегистрированы!") 
+     msg := tgBotAPI.NewMessage(chatID, "Зарегестрируйтесь через:") 
      msg.ReplyMarkup = tgBotAPI.NewInlineKeyboardMarkup( 
       tgBotAPI.NewInlineKeyboardRow( 
        tgBotAPI.NewInlineKeyboardButtonData("Регистрация через GitHub", "github_reg"), 

@@ -11,7 +11,7 @@ import (
 
 
 
-var token = "7557341825:AAG63dOPf6VY_8HRQSSoD2WfKp7QiKNklhc"
+var token = "7717459803:AAEsKjO39AIeoVLtxZs9Fv7x8yrKlvpOn5A"
 
 
 var registeredUsers = map[int64]bool{}

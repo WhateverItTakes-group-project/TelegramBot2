@@ -1,70 +1,124 @@
+
 package main
 
 import (
-    "context"
-    "fmt"
-    "log"
-    "net/http"
-    "os"
+ "fmt"
+ "log"
+ 
 
-    "github.com/go-redis/redis/v8"
-    "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+ tgBotAPI "github.com/go-telegram-bot-api/telegram-bot-api"
 )
 
-var (
-    bot         *tgbotapi.BotAPI
-    redisClient  *redis.Client
-    ctx         = context.Background()
-)
 
-func init() {
-    var err error
-    bot, err = tgbotapi.NewBotAPI("7717459803:AAEsKjO39AIeoVLtxZs9Fv7x8yrKlvpOn5A")
-    if err != nil {
-        log.Panic(err)
-    }
 
-    redisClient = redis.NewClient(&redis.Options{
-        Addr:     os.Getenv("REDIS_ADDR"), 
-        Password: "", 
-        DB:       0,  
-    })
-}
+var token = "7717459803:AAEsKjO39AIeoVLtxZs9Fv7x8yrKlvpOn5A"
+
+
+var registeredUsers = map[int64]bool{}
 
 func main() {
-    log.Printf("Authorized on account %s", bot.Self.UserName)
+ bot, err := tgBotAPI.NewBotAPI(token)
+ if err != nil {
+  log.Fatal(err)
+ }
 
+ log.Printf("Authorized on account %s", bot.Self.UserName)
+
+ u := tgBotAPI.NewUpdate(0)
+ u.Timeout = 60
+
+ updates, err := bot.GetUpdatesChan(u)
+
+ for update := range updates {
+  if update.Message == nil && update.CallbackQuery == nil {
+   continue
+  }
+
+  if update.Message != nil {
+   switch update.Message.Text {
+   case "/start":
+    handleStart(update.Message.Chat.ID, bot)
+   }
+  }
+
+  if update.CallbackQuery != nil {
+   handleCallback(update.CallbackQuery, bot)
+  }
+ }
+}
+
+func handleStart(chatID int64, bot *tgBotAPI.BotAPI) {
+ if !registeredUsers[chatID] {
+  msg := tgBotAPI.NewMessage(chatID, "Вы не зарегистрированы. Пожалуйста, зарегистрируйтесь или войдите в аккаунт.")
+
+  registrationKeyboard := tgBotAPI.NewInlineKeyboardMarkup(
+   tgBotAPI.NewInlineKeyboardRow(
+    tgBotAPI.NewInlineKeyboardButtonData("Зарегистрироваться", "register"),
+    tgBotAPI.NewInlineKeyboardButtonData("Войти", "login"),
+   ),
+  )
+
+  msg.ReplyMarkup = registrationKeyboard
+
+  if _, err := bot.Send(msg); err != nil {
+   fmt.Println(err)
+  }
+ } else {
+  msg := tgBotAPI.NewMessage(chatID, "Добро пожаловать обратно! Выберите способ регистрации:")
+  registrationKeyboard := tgBotAPI.NewInlineKeyboardMarkup(
+   tgBotAPI.NewInlineKeyboardRow(
+    tgBotAPI.NewInlineKeyboardButtonData("Регистрация через GitHub", "github_reg"),
+    tgBotAPI.NewInlineKeyboardButtonData("Регистрация через Яндекс", "yandex_reg"),
+   ),
+  )
+
+  msg.ReplyMarkup = registrationKeyboard
+
+  if _, err := bot.Send(msg); err != nil {
+   fmt.Println(err)
+  }
+ }
+}
+
+
+func handleCallback(callbackQuery *tgBotAPI.CallbackQuery, bot *tgBotAPI.BotAPI) { 
+    chatID := callbackQuery.Message.Chat.ID 
    
-    updates := bot.ListenForWebhook("/" + "7717459803:AAEsKjO39AIeoVLtxZs9Fv7x8yrKlvpOn5A")
-
-    go func() {
-        log.Fatal(http.ListenAndServe(":" + os.Getenv("PORT"), nil))
-    }()
-
-    for update := range updates {
-        if update.Message == nil { 
-            continue
-        }
-
-        chatID := update.Message.Chat.ID
-
-      
-        if isUserRegistered(chatID) {
-            msg := tgbotapi.NewMessage(chatID, "Вы зарегистрированы! Ваше сообщение: "+update.Message.Text)
-            bot.Send(msg)
-        } else {
-            msg := tgbotapi.NewMessage(chatID, "Вы не зарегистрированы. Пожалуйста, зарегистрируйтесь.")
-            bot.Send(msg)
-        }
+    switch callbackQuery.Data { 
+    case "register": 
+     registeredUsers[chatID] = true // Регистрация пользователя 
+     msg := tgBotAPI.NewMessage(chatID, "Вы успешно зарегистрированы!") 
+     msg.ReplyMarkup = tgBotAPI.NewInlineKeyboardMarkup( 
+      tgBotAPI.NewInlineKeyboardRow( 
+       tgBotAPI.NewInlineKeyboardButtonData("Регистрация через GitHub", "github_reg"), 
+       tgBotAPI.NewInlineKeyboardButtonData("Регистрация через Яндекс", "yandex_reg"), 
+      ), 
+     ) 
+     msg.ReplyToMessageID = callbackQuery.Message.MessageID 
+   
+    
+     if _, err := bot.Send(msg); err != nil { 
+      fmt.Println(err) 
+     }
+   
+     
+     if _, err := bot.AnswerCallbackQuery(tgBotAPI.NewCallback(callbackQuery.ID, "")); err != nil { 
+      fmt.Println(err) 
+     }
+   
+    case "login": 
+     msg := tgBotAPI.NewMessage(chatID, "Введите ваши данные для входа:") 
+     msg.ReplyToMessageID = callbackQuery.Message.MessageID
+     if _, err := bot.Send(msg); err != nil {
+      fmt.Println(err) 
+     }
+   
+    
+     if _, err := bot.AnswerCallbackQuery(tgBotAPI.NewCallback(callbackQuery.ID, "")); err != nil { 
+      fmt.Println(err) 
+     }
     }
-}
+   }
+   
+   
 
-
-func isUserRegistered(chatID int64) bool {
-    exists, err := redisClient.Exists(ctx, fmt.Sprintf("user:%d", chatID)).Result()
-    if err != nil {
-        log.Println("Ошибка проверки пользователя:", err)
-        return false
-    }
-    return exists > 0
-}
